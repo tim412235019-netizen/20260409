@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>嘉義市氣候情境模擬</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        #map { height: 100vh; width: 100%; }
+        .controls { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .info-legend {
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        border-radius: 8px;
+        max-width: 250px;
+        position: relative; /* 為了定位按鈕 */
+    }
+    /* 收合按鈕樣式 */
+    .toggle-btn {
+        background: #f8f9fa;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        cursor: pointer;
+        padding: 2px 6px;
+        font-size: 12px;
+        float: right;
+    }
+    /* 說明內容區塊 */
+    #legend-content {
+        margin-top: 5px;
+        display: block; /* 預設顯示 */
+    }
+    </style>
+</head>
+<body>
+    <div class="controls"><button onclick="getLocation()">📍 確認我的 GPS 位置</button></div>
+    <div id="map"></div>
+
+    <script>
+        // 1. 定義底圖圖層
+        var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+        });
+
+        var esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community'
+        });
+
+            // 2. 初始化地圖 (預設使用衛星圖層 esri)
+            var map = L.map('map', {
+             center: [23.48, 120.45],
+                zoom: 13,
+                layers: [osm] // 預設進來先看衛星圖
+            });
+        // 2. 定義顏色比例尺 (暫定範圍，稍後會自動對齊)
+        var colorScaleHigh = d3.scaleSequential(d3.interpolateReds).domain([20, 50]);
+        var colorScaleLow = d3.scaleSequential(d3.interpolateBlues).domain([60, 80]);
+
+        // 3. 建立圖層容器
+        var highTempGroup126 = L.layerGroup().addTo(map);
+        var lowTempGroup126 = L.layerGroup();
+        var highTempGroup245 = L.layerGroup();
+        var lowTempGroup245 = L.layerGroup();
+        var highTempGroup370 = L.layerGroup();
+        var lowTempGroup370 = L.layerGroup();
+        var highTempGroup585 = L.layerGroup();
+        var lowTempGroup585 = L.layerGroup();
+
+        /**
+         * 唯一渲染函式 (避免覆寫)
+         */
+        function processAndRender(data, fieldName, colorScale, group) {
+            console.log(`正在渲染圖層 [${fieldName}]...`);
+            
+            // 自動調整比例尺 Domain，確保顏色正確分布
+            const values = data.features.map(f => f.properties[fieldName]).filter(v => v != null);
+            if (values.length > 0) {
+                const minV = Math.min(...values);
+                const maxV = Math.max(...values);
+                colorScale.domain([minV, maxV]);
+                console.log(`${fieldName} 數值範圍: ${minV} ~ ${maxV}`);
+            }
+
+            L.geoJSON(data, {
+                style: function (feature) {
+                    var val = feature.properties[fieldName];
+                    return {
+                        fillColor: colorScale(val),
+                        weight: 1,
+                        opacity: 0.8,
+                        color: 'white',
+                        fillOpacity: 0.7
+                    };
+                },
+                onEachFeature: function (feature, layer) {
+                    layer.bindPopup(`<b>預測天數:</b> ${feature.properties[fieldName]} 天`);
+                }
+            }).addTo(group);
+        }
+
+        // 4. 載入高溫資料
+        fetch('SSP126_Short_21_40_high.geojson')
+            .then(res => res.json())
+            .then(data => {
+                processAndRender(data, 'days',colorScaleHigh, highTempGroup126);
+            })
+            .catch(err => console.error("高溫載入出錯:", err));
+        fetch('SSP245_Short_21_40_high.geojson')
+            .then(res => res.json())
+            .then(data => {
+                processAndRender(data, 'days',colorScaleHigh, highTempGroup245);
+            })
+            .catch(err => console.error("高溫載入出錯:", err));
+        fetch('SSP370_Short_21_40_high.geojson')
+            .then(res => res.json())
+            .then(data => {
+                processAndRender(data, 'days',colorScaleHigh, highTempGroup370);
+            })
+            .catch(err => console.error("高溫載入出錯:", err));
+        fetch('SSP585_Short_21_40_high.geojson')
+            .then(res => res.json())
+            .then(data => {
+                processAndRender(data, 'days',colorScaleHigh, highTempGroup585);
+            })
+            .catch(err => console.error("高溫載入出錯:", err));
+
+        // 5. 載入低溫資料
+        fetch('SSP126_Short_21_40_low.geojson')
+            .then(res => res.json())
+            .then(data => {
+                processAndRender(data, 'days', colorScaleLow, lowTempGroup126);
+            })
+            .catch(err => console.error("低溫載入出錯:", err));
+        fetch('SSP245_Short_21_40_low.geojson')
+            .then(res => res.json())
+            .then(data => {
+                processAndRender(data, 'days', colorScaleLow, lowTempGroup245);
+            })
+            .catch(err => console.error("低溫載入出錯:", err));
+        fetch('SSP370_Short_21_40_low.geojson')
+            .then(res => res.json())
+            .then(data => {
+                processAndRender(data, 'days', colorScaleLow, lowTempGroup370);
+            })
+            .catch(err => console.error("低溫載入出錯:", err));
+        fetch('SSP585_Short_21_40_low.geojson')
+            .then(res => res.json())
+            .then(data => {
+                processAndRender(data, 'days', colorScaleLow, lowTempGroup585);
+            })
+            .catch(err => console.error("低溫載入出錯:", err));
+        // 6. 載入邊界 (注意檔名空格可能造成問題，建議檢查檔名)
+        fetch('chiayi_boundary.geojson')
+            .then(res => res.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: { color: "black", weight: 3, fill: false, pointerEvents: 'none' }
+                }).addTo(map);
+            })
+            .catch(err => console.error("邊界載入出錯:", err));
+
+        // 7. 圖層切換控制
+        var baseMaps = {
+                 "街道地圖": osm,
+                 "衛星影像": esri,
+                };
+
+            var overlayMaps = {
+                "ssp126高溫日數": highTempGroup126,
+                "ssp245高溫日數": highTempGroup245,
+                "ssp370高溫日數": highTempGroup370,
+                "ssp585高溫日數": highTempGroup585,
+                "ssp126低溫日數": lowTempGroup126,
+                "ssp245低溫日數": lowTempGroup245,
+                "ssp370低溫日數": lowTempGroup370,
+                "ssp585低溫日數": lowTempGroup585,
+                };
+
+L.control.layers(baseMaps, overlayMaps, {collapsed: false}).addTo(map);
+        // GPS 功能
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map).bindPopup("你在這裡").openPopup();
+                    map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+                });
+            }
+        }
+var legend = L.control({position: 'bottomleft'});
+
+legend.onAdd = function (map) {
+    var div = L.DomUtil.create('div', 'info-legend');
+    div.innerHTML = `
+        <button class="toggle-btn" onclick="toggleLegend()">➖ 收合</button>
+        <h4>氣候情境說明-短期(2021-2040)</h4>
+        <div id="legend-content">
+        <b>模式：TaiESM1</b><br>
+        <b>情境：SSP1-2.6</b>
+        <br>嘉義市韌性防災計畫-中正大學學研團隊製。<br>
+        <hr>
+        <p>🔴 <b>高溫日數</b>：指該區域日最高溫大於35°C的平均天數。</p>
+        <p>🔵 <b>低溫日數</b>：指該區域日最低溫小於15°C的平均天數。</p>
+        <small>資料來源：TCCIP AR6 1km網格日資料</small><br>
+        <small><b>#分析結果僅供參考</b></small>
+        </div>
+    `;
+    L.DomEvent.disableClickPropagation(div);
+    return div;
+};
+function toggleLegend() {
+    var content = document.getElementById("legend-content");
+    var btn = document.querySelector(".toggle-btn");
+    
+    if (content.style.display === "none") {
+        content.style.display = "block"; // 換行顯示內容
+        btn.innerHTML = "➖ 收合";
+    } else {
+        content.style.display = "none"; // 縮小視窗
+        btn.innerHTML = "➕ 展開說明";
+    }
+}
+
+legend.addTo(map);
+    </script>
+</body>
+</html>

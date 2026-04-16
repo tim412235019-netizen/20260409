@@ -200,7 +200,7 @@
             if (!districtName) {
                 vSelect.disabled = true;
                 vSelect.innerHTML = '<option value="">-- 請先選擇區 --</option>';
-                highlightLayer.clearLayers(); // 清除高亮
+                highlightLayer.clearLayers(); 
                 return;
             }
 
@@ -279,10 +279,8 @@
 
                 onEachFeature: function (f, l) {
                     l.on('click', function(e) {
-                        // 1. 先試著抓原有的里名
                         var vName = f.properties.里名 || f.properties.VILLNAME; 
                         
-                        // 2. 如果找不到，就用 Turf.js 現場算 (Point in Polygon)
                         if (!vName && villageLayer) {
                             var pt = turf.point([e.latlng.lng, e.latlng.lat]); // 抓取滑鼠點擊座標
                             for (var i = 0; i < villageLayer.features.length; i++) {
@@ -295,24 +293,28 @@
                             }
                         }
 
-                        // 3. 如果算出來有里名，就執行高亮跟選單連動
                         if (vName) {
                             highlightVillage(vName, false); 
-                            
-                            // 同步選單 (如果能找到對應的區)
                             var matchedVillage = villageLayer.features.find(vf => vf.properties.VILLNAME === vName);
                             if (matchedVillage) {
                                 var distName = matchedVillage.properties.TOWNNAME || matchedVillage.properties.DISTRICT;
                                 if (distName) {
-                                    document.getElementById('district-select').value = distName;
-                                    updateVillageDropdown(distName);
+                                    var distSelect = document.getElementById('district-select');
+                                    // 加一個判斷，避免重複觸發不必要的更新
+                                    if(distSelect && distSelect.value !== distName) {
+                                        distSelect.value = distName;
+                                        updateVillageDropdown(distName);
+                                    }
                                 }
                             }
-                            document.getElementById('village-search-select').value = vName;
+                            var vSelect = document.getElementById('village-search-select');
+                            if(vSelect) vSelect.value = vName;
                         }
 
-                        // 4. 更新彈出視窗
-                        l.bindPopup(`<b>${vName || '邊界外點位'}</b><br>預估天數: ${f.properties[fieldName]} 天`).openPopup();
+                        L.popup()
+                            .setLatLng(e.latlng) // 強制鎖定在滑鼠點擊的精確經緯度
+                            .setContent(`<b>${vName || '邊界外點位'}</b><br>預估天數: ${f.properties[fieldName]} 天`)
+                            .openOn(map);
                     });
                 }
             }).addTo(group);

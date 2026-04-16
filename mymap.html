@@ -70,6 +70,47 @@
             margin-top: 5px;
         cursor: pointer;
         }
+        /* 1. 修正手機版 100vh 被網址列遮擋的問題 */
+#map { 
+    height: 100vh; 
+    height: 100dvh; /* dvh 會自動扣除手機網址列高度 */
+    width: 100%; 
+    z-index: 1; 
+}
+
+/* 2. 手機版專屬樣式 (當螢幕寬度小於 768px 時) */
+@media (max-width: 768px) {
+    /* 讓上方控制面板變窄，避免擋住地圖中心 */
+    .controls {
+        left: 10px;
+        top: 10px;
+        width: 160px; /* 縮小寬度 */
+        padding: 8px;
+        font-size: 12px;
+    }
+    
+    .controls button {
+        padding: 4px 0;
+        font-size: 11px;
+    }
+
+    /* 解決左右圖例「撞車」的問題：縮小比例 */
+    .info-legend, .colorbar-legend {
+        max-width: 140px; /* 限制寬度以免重疊 */
+        padding: 8px;
+        font-size: 11px;
+        transform: scale(0.9); /* 整體縮小 90% */
+        transform-origin: bottom left;
+    }
+
+    .colorbar-legend {
+        transform-origin: bottom right;
+    }
+
+    /* 隱藏部分不重要的文字以節省空間 */
+    .info-legend h4 { font-size: 13px; }
+    .info-legend p { display: none; } /* 手機版隱藏詳細文字說明，只留顏色提示 */
+}
     </style>
 </head>
 <body>
@@ -399,6 +440,12 @@
 
         // 頁面載入後，延遲 800 毫秒執行一次更新，確保初始資料的數值能寫入圖例
         setTimeout(updateClimateLayer, 800);
+        // 偵測到手機就自動收合左側說明
+        window.onload = function() {
+        if (window.innerWidth < 768) {
+        toggleLegend(); // 偵測到手機就自動收合左側說明
+          }
+        };
     </script>
 </body>
 </html>

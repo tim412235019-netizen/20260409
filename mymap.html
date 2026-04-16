@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
     <style>
         body { margin: 0; padding: 0; }
         #map { height: 100vh; width: 100%; z-index: 1; }
@@ -67,58 +67,50 @@
             margin-top: 5px;
         cursor: pointer;
         }
-        /* 1. 修正手機版 100vh 被網址列遮擋的問題 */
 #map { 
     height: 100vh; 
-    height: 100dvh; /* dvh 會自動扣除手機網址列高度 */
+    height: 100dvh;
     width: 100%; 
     z-index: 1; 
 }
 
 @media (max-width: 768px) {
-    /* 讓上方控制面板變窄，避免擋住地圖中心 */
-    .controls {
-        left: 10px;
-        top: 10px;
-        width: 160px; /* 縮小寬度 */
-        padding: 8px;
-        font-size: 12px;
+    .controls { 
+        left: 10px; 
+        top: 10px; 
+        width: 150px; 
+        padding: 8px; 
+        font-size: 12px; 
     }
+    .controls button { padding: 4px 0; font-size: 11px; }
+    .controls select { padding: 4px; font-size: 12px; margin-bottom: 5px; }
     
-    .controls button {
-        padding: 4px 0;
-        font-size: 11px;
+    .info-legend, .colorbar-legend { 
+        max-width: 130px; 
+        transform: scale(0.85); 
+        transform-origin: bottom left; 
     }
-
-    .info-legend, .colorbar-legend {
-        max-width: 140px; /* 限制寬度以免重疊 */
-        padding: 8px;
-        font-size: 11px;
-        transform: scale(0.9); /* 整體縮小 90% */
-        transform-origin: bottom left;
+    .colorbar-legend { 
+        transform-origin: bottom right; 
     }
-
-    .colorbar-legend {
-        transform-origin: bottom right;
-    }
-
-    .info-legend h4 { font-size: 13px; }
-    .info-legend p { display: none; } /* 手機版隱藏詳細文字說明，只留顏色提示 */
+    .info-legend p { display: none; } 
 
     .village-control {
-        min-width: 120px;
+        min-width: unset; 
+        width: 130px;  
         padding: 8px;
-        transform: scale(0.85); /* 縮小到 85% */
-        transform-origin: top right; /* 基準點對齊右上角，避免跑版 */
         margin-top: 10px;
         margin-right: 10px;
+        transform: none;  
     }
     .village-control div {
-        font-size: 11px !important; /* 標題文字縮小 */
+        font-size: 12px !important; 
+        margin-bottom: 4px !important;
     }
     .village-control select {
         padding: 4px;
-        font-size: 11px; /* 下拉選單文字縮小 */
+        font-size: 12px;  
+        height: auto;
     }
 }
     </style>
@@ -160,20 +152,19 @@
         var map = L.map('map', {
             center: [23.48, 120.45],
             zoom: 13,
-            layers: [osm, groups.h126] });// 預設底圖與 SSP126 高溫
+            layers: [osm, groups.h126] });
             
         map.createPane('climatePane');
         map.getPane('climatePane').style.zIndex = 650; 
-        map.getPane('climatePane').style.pointerEvents = 'none'; // 面本身不擋點擊，但裡面的內容要能點
-        
+        map.getPane('climatePane').style.pointerEvents = 'none'; 
   
-        var villageLayer; // 儲存所有里界原始資料
-        var highlightLayer = L.layerGroup().addTo(map); // 用於顯示「被選中」的里
+        var villageLayer; 
+        var highlightLayer = L.layerGroup().addTo(map); 
 
         fetch('chiayi_boundary.geojson')
         .then(res => res.json())
         .then(data => {
-            villageLayer = data; // 存入全域變數供查詢用
+            villageLayer = data;
 
             L.geoJSON(data, {
                 style: { color: "#333", weight: 1, fill: false, opacity: 0.2, pointerEvents: 'none' }
@@ -197,14 +188,14 @@
                 </select>
                 </div>
             `;
-            L.DomEvent.disableClickPropagation(div); // 防止點擊選單時地圖跟著動
+            L.DomEvent.disableClickPropagation(div);
             return div;
         };
         villageControl.addTo(map);
 
         function updateVillageDropdown(districtName) {
             var vSelect = document.getElementById('village-search-select');
-            vSelect.innerHTML = '<option value="">-- 請選擇里別 --</option>'; // 清空舊選項
+            vSelect.innerHTML = '<option value="">-- 請選擇里別 --</option>';
             
             if (!districtName) {
                 vSelect.disabled = true;
@@ -237,7 +228,7 @@
                 filter: function(f) { return f.properties.VILLNAME === villageName; },
                 style: { 
                     color: "#FFFFFF", 
-                    weight: 12,       // 比較粗
+                    weight: 12,      
                     fill: true, 
                     fillOpacity: 0.1, 
                     pointerEvents: 'none' 
@@ -248,15 +239,15 @@
                 filter: function(f) { return f.properties.VILLNAME === villageName; },
                 style: { 
                     color: "#00FF00", 
-                    weight: 8,       // 稍微細一點
+                    weight: 8,      
                     fill: false, 
-                    dashArray: '10, 10', // 虛線間距加大
+                    dashArray: '10, 10',
                     pointerEvents: 'none' 
                 }
             }).addTo(highlightLayer);
 
             if (isZoom && target.getBounds().isValid()) {
-                map.fitBounds(target.getBounds(), { padding: [20, 20] }); // 縮放時留一點邊界感
+                map.fitBounds(target.getBounds(), { padding: [20, 20] }); 
             }
         }
 
@@ -285,23 +276,44 @@
                         weight: 0.5, opacity: 0.5, color: 'white', fillOpacity: 0.7
                     };
                 },
-                // 【修復】將原本孤立的 onEachFeature 邏輯整合進來，支援點擊高亮
+
                 onEachFeature: function (f, l) {
                     l.on('click', function(e) {
+                        // 1. 先試著抓原有的里名
                         var vName = f.properties.里名 || f.properties.VILLNAME; 
+                        
+                        // 2. 如果找不到，就用 Turf.js 現場算 (Point in Polygon)
+                        if (!vName && villageLayer) {
+                            var pt = turf.point([e.latlng.lng, e.latlng.lat]); // 抓取滑鼠點擊座標
+                            for (var i = 0; i < villageLayer.features.length; i++) {
+                                var poly = villageLayer.features[i];
+                                // 如果點落在這個多邊形內，就把該里名抓出來
+                                if (turf.booleanPointInPolygon(pt, poly)) {
+                                    vName = poly.properties.VILLNAME || poly.properties.里名;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // 3. 如果算出來有里名，就執行高亮跟選單連動
                         if (vName) {
-                            highlightVillage(vName, false); // 高亮但不縮放，維持原本視覺
-                            // 自動切換區選單與里選單 (若有 TOWNNAME 屬性)
-                            var distName = f.properties.TOWNNAME || f.properties.DISTRICT;
-                            if(distName) {
-                                document.getElementById('district-select').value = distName;
-                                updateVillageDropdown(distName);
+                            highlightVillage(vName, false); 
+                            
+                            // 同步選單 (如果能找到對應的區)
+                            var matchedVillage = villageLayer.features.find(vf => vf.properties.VILLNAME === vName);
+                            if (matchedVillage) {
+                                var distName = matchedVillage.properties.TOWNNAME || matchedVillage.properties.DISTRICT;
+                                if (distName) {
+                                    document.getElementById('district-select').value = distName;
+                                    updateVillageDropdown(distName);
+                                }
                             }
                             document.getElementById('village-search-select').value = vName;
                         }
+
+                        // 4. 更新彈出視窗
+                        l.bindPopup(`<b>${vName || '邊界外點位'}</b><br>預估天數: ${f.properties[fieldName]} 天`).openPopup();
                     });
-                    // 彈出視窗依然保留你設定的文字
-                    l.bindPopup(`<b>${f.properties.VILLNAME || f.properties.里名 || '無名里'}</b><br>預估天數: ${f.properties[fieldName]} 天`);
                 }
             }).addTo(group);
         }

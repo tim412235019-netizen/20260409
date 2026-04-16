@@ -13,7 +13,6 @@
         body { margin: 0; padding: 0; }
         #map { height: 100vh; width: 100%; z-index: 1; }
         
-        /* 上方控制按鈕與選單區 */
         .controls { 
             position: absolute; top: 10px; left: 50px; z-index: 1000; 
             background: rgba(255, 255, 255, 0.95); padding: 12px; 
@@ -33,7 +32,6 @@
             font-family: "Microsoft JhengHei", sans-serif; font-size: 13px;
         }
 
-        /* 左下角說明框 */
         .info-legend {
             padding: 12px; background: rgba(255, 255, 255, 0.9);
             box-shadow: 0 0 10px rgba(0,0,0,0.3); border-radius: 8px;
@@ -45,7 +43,6 @@
         }
         #legend-content { margin-top: 5px; display: block; line-height: 1.6; }
         
-        /* 右下角數值色階條 */
         .colorbar-legend {
             padding: 10px; background: rgba(255, 255, 255, 0.9);
             box-shadow: 0 0 10px rgba(0,0,0,0.3); border-radius: 5px;
@@ -78,7 +75,6 @@
     z-index: 1; 
 }
 
-/* 2. 手機版專屬樣式 (當螢幕寬度小於 768px 時) */
 @media (max-width: 768px) {
     /* 讓上方控制面板變窄，避免擋住地圖中心 */
     .controls {
@@ -94,7 +90,6 @@
         font-size: 11px;
     }
 
-    /* 解決左右圖例「撞車」的問題：縮小比例 */
     .info-legend, .colorbar-legend {
         max-width: 140px; /* 限制寬度以免重疊 */
         padding: 8px;
@@ -107,7 +102,6 @@
         transform-origin: bottom right;
     }
 
-    /* 隱藏部分不重要的文字以節省空間 */
     .info-legend h4 { font-size: 13px; }
     .info-legend p { display: none; } /* 手機版隱藏詳細文字說明，只留顏色提示 */
 }
@@ -139,134 +133,128 @@
     <div id="map"></div>
 
     <script>
-        // 1. 底圖設定
         var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' });
         var esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri' });
 
-        // 2. 建立圖層容器
         var groups = {
             h126: L.layerGroup(), h245: L.layerGroup(), h370: L.layerGroup(), h585: L.layerGroup(),
             l126: L.layerGroup(), l245: L.layerGroup(), l370: L.layerGroup(), l585: L.layerGroup(),
-
         };
 
-        // 3. 初始化地圖
         var map = L.map('map', {
             center: [23.48, 120.45],
             zoom: 13,
             layers: [osm, groups.h126] });// 預設底圖與 SSP126 高溫
-        // 創建一個專門放氣候數據的面，並設定極高的 zIndex
+            
         map.createPane('climatePane');
         map.getPane('climatePane').style.zIndex = 650; 
         map.getPane('climatePane').style.pointerEvents = 'none'; // 面本身不擋點擊，但裡面的內容要能點
-        // --- [新增變數] ---
+        
+  
         var villageLayer; // 儲存所有里界原始資料
         var highlightLayer = L.layerGroup().addTo(map); // 用於顯示「被選中」的里
 
-        // 1. 載入嘉義市里界並生成右上角選單
         fetch('chiayi_boundary.geojson')
-            .then(res => res.json())
-            .then(data => {
-        villageLayer = data; // 存入全域變數
+        .then(res => res.json())
+        .then(data => {
+            villageLayer = data; // 存入全域變數供查詢用
 
-        // 畫出基礎里界線 (淡淡的就好)
-        L.geoJSON(data, {
-            style: { color: "#333", weight: 1, fill: true, opacity: 0.8, pointerEvents: 'none' }
-        }).addTo(map);
+            L.geoJSON(data, {
+                style: { color: "#333", weight: 1, fill: false, opacity: 0.2, pointerEvents: 'none' }
+            }).addTo(map);
+        });
 
-        // 初始化右上角選單內容
-        populateVillageSelect(data);
-            });
-
-        // 2. 建立右上角自定義控制項
         var villageControl = L.control({position: 'topright'});
         villageControl.onAdd = function() {
-        var div = L.DomUtil.create('div', 'village-control');
-        div.innerHTML = `
-        <div style="font-weight:bold; font-size:13px;">🔍 行政區快搜</div>
-        <select id="village-search-select" onchange="zoomToVillage(this.value)">
-            <option value="">-- 請選擇里別 --</option>
-        </select>
+            var div = L.DomUtil.create('div', 'village-control');
+   
+            div.innerHTML = `
+                <div class="village-control">
+                <div style="font-weight:bold; font-size:13px; margin-bottom:5px;">🔍 行政區快搜</div>
+                 <select id="district-select" onchange="updateVillageDropdown(this.value)">
+                <option value="">-- 請選擇區 --</option>
+                <option value="東區">東區</option>
+                <option value="西區">西區</option>
+                    </select>
+                <select id="village-search-select" onchange="zoomToVillage(this.value)" disabled>
+                <option value="">-- 請先選擇區 --</option>
+                </select>
+                </div>
             `;
-        L.DomEvent.disableClickPropagation(div); // 防止點擊選單時地圖跟著動
-        return div;
+            L.DomEvent.disableClickPropagation(div); // 防止點擊選單時地圖跟著動
+            return div;
         };
         villageControl.addTo(map);
 
-    // 3. 自動填入選單選項
-        function populateVillageSelect(data) {
-        var select = document.getElementById('village-search-select');
-    // 取得所有里名並排序
-        var names = data.features.map(f => f.properties.VILLNAME).sort();
-        names.forEach(name => {
-        var opt = document.createElement('option');
-        opt.value = name;
-        opt.innerHTML = name;
-        select.appendChild(opt);
-        });
+        function updateVillageDropdown(districtName) {
+            var vSelect = document.getElementById('village-search-select');
+            vSelect.innerHTML = '<option value="">-- 請選擇里別 --</option>'; // 清空舊選項
+            
+            if (!districtName) {
+                vSelect.disabled = true;
+                vSelect.innerHTML = '<option value="">-- 請先選擇區 --</option>';
+                highlightLayer.clearLayers(); // 清除高亮
+                return;
+            }
+
+            var filteredVillages = villageLayer.features.filter(function(f) {
+                return f.properties.TOWNNAME === districtName || f.properties.DISTRICT === districtName;
+            });
+
+            var names = filteredVillages.map(f => f.properties.VILLNAME).sort();
+
+            if (names.length > 0) {
+                vSelect.disabled = false;
+                names.forEach(name => {
+                    var opt = document.createElement('option');
+                    opt.value = name;
+                    opt.innerHTML = name;
+                    vSelect.appendChild(opt);
+                });
+            }
         }
 
-    // 4. [功能] 根據里名高亮並縮放
         function highlightVillage(villageName, isZoom) {
-        highlightLayer.clearLayers();
+            highlightLayer.clearLayers();
 
-        // 1. 先畫一層粗的白色底線 (增加對比度)
-        L.geoJSON(villageLayer, {
-        filter: function(f) { return f.properties.VILLNAME === villageName; },
-        style: { 
-            color: "#FFFFFF", 
-            weight: 12,       // 比較粗
-            fill: true, 
-            fillOpacity: 0.1, 
-            pointerEvents: 'none' 
-        }
-        }).addTo(highlightLayer);
+            L.geoJSON(villageLayer, {
+                filter: function(f) { return f.properties.VILLNAME === villageName; },
+                style: { 
+                    color: "#FFFFFF", 
+                    weight: 12,       // 比較粗
+                    fill: true, 
+                    fillOpacity: 0.1, 
+                    pointerEvents: 'none' 
+                }
+            }).addTo(highlightLayer);
 
-        // 2. 再畫一層原本的黃色虛線
-        var target = L.geoJSON(villageLayer, {
-        filter: function(f) { return f.properties.VILLNAME === villageName; },
-        style: { 
-            color: "#00FF00", 
-            weight: 8,       // 稍微細一點
-            fill: false, 
-            dashArray: '10, 10', // 虛線間距加大
-            pointerEvents: 'none' 
-        }
-        }).addTo(highlightLayer);
+            var target = L.geoJSON(villageLayer, {
+                filter: function(f) { return f.properties.VILLNAME === villageName; },
+                style: { 
+                    color: "#00FF00", 
+                    weight: 8,       // 稍微細一點
+                    fill: false, 
+                    dashArray: '10, 10', // 虛線間距加大
+                    pointerEvents: 'none' 
+                }
+            }).addTo(highlightLayer);
 
-        if (isZoom && target.getBounds().isValid()) {
-        map.fitBounds(target.getBounds(), { padding: [20, 20] }); // 縮放時留一點邊界感
-        }
+            if (isZoom && target.getBounds().isValid()) {
+                map.fitBounds(target.getBounds(), { padding: [20, 20] }); // 縮放時留一點邊界感
+            }
         }
 
-    // 5. [事件] 選單連動
         function zoomToVillage(name) {
-        if (!name) {
-        highlightLayer.clearLayers();
-        return;
-        }
-        highlightVillage(name, true);
+            if (!name) {
+                highlightLayer.clearLayers();
+                return;
+            }
+            highlightVillage(name, true);
         }
 
-    // 6. [修正] 修改之前的渲染函式，讓點擊點位時連動
-    // 請在你的 processAndRender 的 onEachFeature 裡加入這段
-        function onEachFeature(f, l) {
-        l.on('click', function(e) {
-        // 假設你的點位資料屬性裡有 '里名' (如果沒有，請見下方補充)
-        var vName = f.properties.里名 || f.properties.VILLNAME; 
-        if (vName) {
-            highlightVillage(vName, false); // 高亮但不縮放，維持原本視覺
-            // 同步更新右上角選單的值
-            document.getElementById('village-search-select').value = vName;
-        }
-        l.bindPopup(`<b>${vName}</b><br>預估天數: ${f.properties.days} 天`).openPopup();
-         });
-        }
-        // 4. 定義 D3 顏色比例尺
         var colorScaleHigh = d3.scaleSequential(d3.interpolateReds);
         var colorScaleLow = d3.scaleSequential(d3.interpolateBlues);
 
-        // 5. 核心渲染函式
         function processAndRender(data, fieldName, colorScale, group) {
             const values = data.features.map(f => f.properties[fieldName]).filter(v => v != null);
             if (values.length > 0) {
@@ -281,13 +269,27 @@
                         weight: 0.5, opacity: 0.5, color: 'white', fillOpacity: 0.7
                     };
                 },
+                // 【修復】將原本孤立的 onEachFeature 邏輯整合進來，支援點擊高亮
                 onEachFeature: function (f, l) {
-                    l.bindPopup(`<b>預估天數:</b> ${f.properties[fieldName]} 天`);
+                    l.on('click', function(e) {
+                        var vName = f.properties.里名 || f.properties.VILLNAME; 
+                        if (vName) {
+                            highlightVillage(vName, false); // 高亮但不縮放，維持原本視覺
+                            // 自動切換區選單與里選單 (若有 TOWNNAME 屬性)
+                            var distName = f.properties.TOWNNAME || f.properties.DISTRICT;
+                            if(distName) {
+                                document.getElementById('district-select').value = distName;
+                                updateVillageDropdown(distName);
+                            }
+                            document.getElementById('village-search-select').value = vName;
+                        }
+                    });
+                    // 彈出視窗依然保留你設定的文字
+                    l.bindPopup(`<b>${f.properties.VILLNAME || f.properties.里名 || '無名里'}</b><br>預估天數: ${f.properties[fieldName]} 天`);
                 }
             }).addTo(group);
         }
 
-        // 6. 批次載入 GeoJSON 資料
         const datasets = [
             { file: 'SSP126_Short_21_40_high.geojson', field: 'days', scale: colorScaleHigh, group: groups.h126 },
             { file: 'SSP245_Short_21_40_high.geojson', field: 'days', scale: colorScaleHigh, group: groups.h245 },
@@ -305,15 +307,8 @@
             }).catch(e => console.error("資料載入失敗:", d.file));
         });
 
-        // 載入嘉義市邊界 (最上層，不可點擊)
-        fetch('chiayi_boundary.geojson').then(res => res.json()).then(data => {
-            L.geoJSON(data, { style: { color: "#333", weight: 3, fill: false, pointerEvents: 'none' } }).addTo(map);
-        });
-
-        // 7. 底圖切換器 (因為氣候圖層已移至自訂選單，這裡只留底圖)
         L.control.layers({"街道地圖": osm, "衛星影像": esri}, {}, {position: 'topright'}).addTo(map);
 
-        // 8. 左下角：固定說明圖例
         var legend = L.control({position: 'bottomleft'});
         legend.onAdd = function () {
             var div = L.DomUtil.create('div', 'info-legend');
@@ -337,7 +332,6 @@
         };
         legend.addTo(map);
 
-        // 9. 右下角：動態數值色階條
         var colorBar = L.control({position: 'bottomright'});
         colorBar.onAdd = function () {
             var div = L.DomUtil.create('div', 'colorbar-legend');
@@ -360,23 +354,17 @@
         };
         colorBar.addTo(map);
 
-        // 10. 互動功能與邏輯
-
-        // [核心] 選單驅動圖層切換與色條更新
         function updateClimateLayer() {
             var ssp = document.getElementById('ssp-select').value;
             var type = document.getElementById('type-select').value;
             var targetKey = (type === 'high' ? 'h' : 'l') + ssp;
             var targetGroup = groups[targetKey];
 
-            // A. 清空所有氣候圖層
             Object.keys(groups).forEach(k => map.removeLayer(groups[k]));
 
-            // B. 加上選擇的圖層
             if (targetGroup) {
                 map.addLayer(targetGroup);
                 
-                // C. 更新右下角圖例數值
                 var currentData = datasets.find(d => d.group === targetGroup);
                 if (currentData) {
                     var layers = targetGroup.getLayers();
@@ -404,16 +392,26 @@
             }
         }
 
-        // 返回初始
         function goHome() {
             map.flyTo([23.48, 120.45], 13);
+            
             document.getElementById('ssp-select').value = "126";
             document.getElementById('type-select').value = "high";
             updateClimateLayer();
+
+            var dSelect = document.getElementById('district-select');
+            if(dSelect) dSelect.value = "";
+            
+            var vSelect = document.getElementById('village-search-select');
+            if(vSelect) {
+                vSelect.innerHTML = '<option value="">-- 請先選擇區 --</option>';
+                vSelect.disabled = true;
+            }
+
+            highlightLayer.clearLayers();
             map.closePopup();
         }
 
-        // GPS 定位
         function getLocation() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(pos => {
@@ -425,7 +423,6 @@
             }
         }
 
-        // 左側圖例收合
         function toggleLegend() {
             var c = document.getElementById("legend-content");
             var b = document.querySelector(".toggle-btn");
@@ -437,13 +434,12 @@
                 b.innerHTML = "➕ 展開";
             }
         }
-
-        // 頁面載入後，延遲 800 毫秒執行一次更新，確保初始資料的數值能寫入圖例
+    
         setTimeout(updateClimateLayer, 800);
-        // 偵測到手機就自動收合左側說明
+        
         window.onload = function() {
         if (window.innerWidth < 768) {
-        toggleLegend(); // 偵測到手機就自動收合左側說明
+            toggleLegend(); 
           }
         };
     </script>

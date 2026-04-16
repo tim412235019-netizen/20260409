@@ -1,230 +1,404 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>嘉義市氣候情境模擬</title>
+    <title>嘉義市氣候溫度情境模擬</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    
     <style>
-        #map { height: 100vh; width: 100%; }
-        .controls { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        body { margin: 0; padding: 0; }
+        #map { height: 100vh; width: 100%; z-index: 1; }
+        
+        /* 上方控制按鈕與選單區 */
+        .controls { 
+            position: absolute; top: 10px; left: 50px; z-index: 1000; 
+            background: rgba(255, 255, 255, 0.95); padding: 12px; 
+            border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); 
+            font-family: "Microsoft JhengHei", sans-serif;
+            width: 220px;
+        }
+        .controls button { 
+            cursor: pointer; padding: 6px 0; margin-bottom: 8px; 
+            width: 48%; font-weight: bold; border: 1px solid #ccc;
+            background: white; border-radius: 4px;
+        }
+        .controls button:hover { background: #e9ecef; }
+        .controls select {
+            padding: 6px; margin-bottom: 8px; width: 100%;
+            cursor: pointer; border-radius: 4px; border: 1px solid #ccc;
+            font-family: "Microsoft JhengHei", sans-serif; font-size: 13px;
+        }
+
+        /* 左下角說明框 */
         .info-legend {
-        padding: 12px;
-        background: rgba(255, 255, 255, 0.9);
-        box-shadow: 0 0 10px rgba(0,0,0,0.3);
-        border-radius: 8px;
-        max-width: 250px;
-        position: relative; /* 為了定位按鈕 */
-    }
-    /* 收合按鈕樣式 */
-    .toggle-btn {
-        background: #f8f9fa;
-        border: 1px solid #ccc;
-        border-radius: 3px;
+            padding: 12px; background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 10px rgba(0,0,0,0.3); border-radius: 8px;
+            max-width: 260px; font-family: "Microsoft JhengHei", sans-serif;
+        }
+        .toggle-btn { 
+            background: #f8f9fa; border: 1px solid #ccc; border-radius: 3px; 
+            cursor: pointer; padding: 2px 6px; font-size: 12px; float: right; 
+        }
+        #legend-content { margin-top: 5px; display: block; line-height: 1.6; }
+        
+        /* 右下角數值色階條 */
+        .colorbar-legend {
+            padding: 10px; background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 10px rgba(0,0,0,0.3); border-radius: 5px;
+            width: 180px; font-family: "Microsoft JhengHei", sans-serif;
+        }
+        .colorbar-title { font-size: 13px; font-weight: bold; margin-bottom: 8px; text-align: center; }
+        .gradient-bar { height: 15px; width: 100%; border-radius: 2px; border: 1px solid #999; }
+        .high-gradient { background: linear-gradient(to right, #fee0d2, #de2d26); }
+        .low-gradient { background: linear-gradient(to right, #deebf7, #3182bd); }
+        .bar-labels { display: flex; justify-content: space-between; font-size: 11px; margin-top: 3px; font-weight: bold; }
+        .village-control {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            font-family: "Microsoft JhengHei", sans-serif;
+            min-width: 150px;
+            }
+        .village-control select {
+            width: 100%;
+            padding: 5px;
+            margin-top: 5px;
         cursor: pointer;
-        padding: 2px 6px;
-        font-size: 12px;
-        float: right;
-    }
-    /* 說明內容區塊 */
-    #legend-content {
-        margin-top: 5px;
-        display: block; /* 預設顯示 */
-    }
+        }
     </style>
 </head>
 <body>
-    <div class="controls"><button onclick="getLocation()">📍 確認我的 GPS 位置</button></div>
+
+    <div class="controls">
+        <div style="display: flex; justify-content: space-between;">
+            <button onclick="getLocation()">📍 GPS 定位</button>
+            <button onclick="goHome()">🏠 返回初始</button>
+        </div>
+        <hr style="border: 0; border-top: 1px solid #ddd; margin: 5px 0 10px 0;">
+        <div style="font-weight:bold; font-size:14px; margin-bottom:8px;">⚙️ 快速切換情境</div>
+        
+        <select id="ssp-select" onchange="updateClimateLayer()">
+            <option value="126" selected>SSP126</option>
+            <option value="245">SSP245 </option>
+            <option value="370">SSP370 </option>
+            <option value="585">SSP585 </option>
+        </select>
+        
+        <select id="type-select" onchange="updateClimateLayer()">
+            <option value="high" selected>🌡️ 高溫日數</option>
+            <option value="low">❄️ 低溫日數</option>
+        </select>
+    </div>
+
     <div id="map"></div>
 
     <script>
-        // 1. 定義底圖圖層
-        var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap'
-        });
+        // 1. 底圖設定
+        var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' });
+        var esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri' });
 
-        var esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community'
-        });
+        // 2. 建立圖層容器
+        var groups = {
+            h126: L.layerGroup(), h245: L.layerGroup(), h370: L.layerGroup(), h585: L.layerGroup(),
+            l126: L.layerGroup(), l245: L.layerGroup(), l370: L.layerGroup(), l585: L.layerGroup(),
 
-            // 2. 初始化地圖 (預設使用衛星圖層 esri)
-            var map = L.map('map', {
-             center: [23.48, 120.45],
-                zoom: 13,
-                layers: [osm] // 預設進來先看衛星圖
+        };
+
+        // 3. 初始化地圖
+        var map = L.map('map', {
+            center: [23.48, 120.45],
+            zoom: 13,
+            layers: [osm, groups.h126] });// 預設底圖與 SSP126 高溫
+        // 創建一個專門放氣候數據的面，並設定極高的 zIndex
+        map.createPane('climatePane');
+        map.getPane('climatePane').style.zIndex = 650; 
+        map.getPane('climatePane').style.pointerEvents = 'none'; // 面本身不擋點擊，但裡面的內容要能點
+        // --- [新增變數] ---
+        var villageLayer; // 儲存所有里界原始資料
+        var highlightLayer = L.layerGroup().addTo(map); // 用於顯示「被選中」的里
+
+        // 1. 載入嘉義市里界並生成右上角選單
+        fetch('chiayi_boundary.geojson')
+            .then(res => res.json())
+            .then(data => {
+        villageLayer = data; // 存入全域變數
+
+        // 畫出基礎里界線 (淡淡的就好)
+        L.geoJSON(data, {
+            style: { color: "#333", weight: 1, fill: true, opacity: 0.8, pointerEvents: 'none' }
+        }).addTo(map);
+
+        // 初始化右上角選單內容
+        populateVillageSelect(data);
             });
-        // 2. 定義顏色比例尺 (暫定範圍，稍後會自動對齊)
-        var colorScaleHigh = d3.scaleSequential(d3.interpolateReds).domain([20, 50]);
-        var colorScaleLow = d3.scaleSequential(d3.interpolateBlues).domain([60, 80]);
 
-        // 3. 建立圖層容器
-        var highTempGroup126 = L.layerGroup().addTo(map);
-        var lowTempGroup126 = L.layerGroup();
-        var highTempGroup245 = L.layerGroup();
-        var lowTempGroup245 = L.layerGroup();
-        var highTempGroup370 = L.layerGroup();
-        var lowTempGroup370 = L.layerGroup();
-        var highTempGroup585 = L.layerGroup();
-        var lowTempGroup585 = L.layerGroup();
+        // 2. 建立右上角自定義控制項
+        var villageControl = L.control({position: 'topright'});
+        villageControl.onAdd = function() {
+        var div = L.DomUtil.create('div', 'village-control');
+        div.innerHTML = `
+        <div style="font-weight:bold; font-size:13px;">🔍 行政區快搜</div>
+        <select id="village-search-select" onchange="zoomToVillage(this.value)">
+            <option value="">-- 請選擇里別 --</option>
+        </select>
+            `;
+        L.DomEvent.disableClickPropagation(div); // 防止點擊選單時地圖跟著動
+        return div;
+        };
+        villageControl.addTo(map);
 
-        /**
-         * 唯一渲染函式 (避免覆寫)
-         */
+    // 3. 自動填入選單選項
+        function populateVillageSelect(data) {
+        var select = document.getElementById('village-search-select');
+    // 取得所有里名並排序
+        var names = data.features.map(f => f.properties.VILLNAME).sort();
+        names.forEach(name => {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.innerHTML = name;
+        select.appendChild(opt);
+        });
+        }
+
+    // 4. [功能] 根據里名高亮並縮放
+        function highlightVillage(villageName, isZoom) {
+        highlightLayer.clearLayers();
+
+        // 1. 先畫一層粗的白色底線 (增加對比度)
+        L.geoJSON(villageLayer, {
+        filter: function(f) { return f.properties.VILLNAME === villageName; },
+        style: { 
+            color: "#FFFFFF", 
+            weight: 12,       // 比較粗
+            fill: true, 
+            fillOpacity: 0.1, 
+            pointerEvents: 'none' 
+        }
+        }).addTo(highlightLayer);
+
+        // 2. 再畫一層原本的黃色虛線
+        var target = L.geoJSON(villageLayer, {
+        filter: function(f) { return f.properties.VILLNAME === villageName; },
+        style: { 
+            color: "#00FF00", 
+            weight: 8,       // 稍微細一點
+            fill: false, 
+            dashArray: '10, 10', // 虛線間距加大
+            pointerEvents: 'none' 
+        }
+        }).addTo(highlightLayer);
+
+        if (isZoom && target.getBounds().isValid()) {
+        map.fitBounds(target.getBounds(), { padding: [20, 20] }); // 縮放時留一點邊界感
+        }
+        }
+
+    // 5. [事件] 選單連動
+        function zoomToVillage(name) {
+        if (!name) {
+        highlightLayer.clearLayers();
+        return;
+        }
+        highlightVillage(name, true);
+        }
+
+    // 6. [修正] 修改之前的渲染函式，讓點擊點位時連動
+    // 請在你的 processAndRender 的 onEachFeature 裡加入這段
+        function onEachFeature(f, l) {
+        l.on('click', function(e) {
+        // 假設你的點位資料屬性裡有 '里名' (如果沒有，請見下方補充)
+        var vName = f.properties.里名 || f.properties.VILLNAME; 
+        if (vName) {
+            highlightVillage(vName, false); // 高亮但不縮放，維持原本視覺
+            // 同步更新右上角選單的值
+            document.getElementById('village-search-select').value = vName;
+        }
+        l.bindPopup(`<b>${vName}</b><br>預估天數: ${f.properties.days} 天`).openPopup();
+         });
+        }
+        // 4. 定義 D3 顏色比例尺
+        var colorScaleHigh = d3.scaleSequential(d3.interpolateReds);
+        var colorScaleLow = d3.scaleSequential(d3.interpolateBlues);
+
+        // 5. 核心渲染函式
         function processAndRender(data, fieldName, colorScale, group) {
-            console.log(`正在渲染圖層 [${fieldName}]...`);
-            
-            // 自動調整比例尺 Domain，確保顏色正確分布
             const values = data.features.map(f => f.properties[fieldName]).filter(v => v != null);
             if (values.length > 0) {
-                const minV = Math.min(...values);
-                const maxV = Math.max(...values);
-                colorScale.domain([minV, maxV]);
-                console.log(`${fieldName} 數值範圍: ${minV} ~ ${maxV}`);
+                colorScale.domain([Math.min(...values), Math.max(...values)]);
             }
 
             L.geoJSON(data, {
-                style: function (feature) {
-                    var val = feature.properties[fieldName];
+                pane: 'climatePane',
+                style: function (f) {
                     return {
-                        fillColor: colorScale(val),
-                        weight: 1,
-                        opacity: 0.8,
-                        color: 'white',
-                        fillOpacity: 0.7
+                        fillColor: colorScale(f.properties[fieldName]),
+                        weight: 0.5, opacity: 0.5, color: 'white', fillOpacity: 0.7
                     };
                 },
-                onEachFeature: function (feature, layer) {
-                    layer.bindPopup(`<b>預測天數:</b> ${feature.properties[fieldName]} 天`);
+                onEachFeature: function (f, l) {
+                    l.bindPopup(`<b>預估天數:</b> ${f.properties[fieldName]} 天`);
                 }
             }).addTo(group);
         }
 
-        // 4. 載入高溫資料
-        fetch('SSP126_Short_21_40_high.geojson')
-            .then(res => res.json())
-            .then(data => {
-                processAndRender(data, 'days',colorScaleHigh, highTempGroup126);
-            })
-            .catch(err => console.error("高溫載入出錯:", err));
-        fetch('SSP245_Short_21_40_high.geojson')
-            .then(res => res.json())
-            .then(data => {
-                processAndRender(data, 'days',colorScaleHigh, highTempGroup245);
-            })
-            .catch(err => console.error("高溫載入出錯:", err));
-        fetch('SSP370_Short_21_40_high.geojson')
-            .then(res => res.json())
-            .then(data => {
-                processAndRender(data, 'days',colorScaleHigh, highTempGroup370);
-            })
-            .catch(err => console.error("高溫載入出錯:", err));
-        fetch('SSP585_Short_21_40_high.geojson')
-            .then(res => res.json())
-            .then(data => {
-                processAndRender(data, 'days',colorScaleHigh, highTempGroup585);
-            })
-            .catch(err => console.error("高溫載入出錯:", err));
+        // 6. 批次載入 GeoJSON 資料
+        const datasets = [
+            { file: 'SSP126_Short_21_40_high.geojson', field: 'days', scale: colorScaleHigh, group: groups.h126 },
+            { file: 'SSP245_Short_21_40_high.geojson', field: 'days', scale: colorScaleHigh, group: groups.h245 },
+            { file: 'SSP370_Short_21_40_high.geojson', field: 'days', scale: colorScaleHigh, group: groups.h370 },
+            { file: 'SSP585_Short_21_40_high.geojson', field: 'days', scale: colorScaleHigh, group: groups.h585 },
+            { file: 'SSP126_Short_21_40_low.geojson',  field: 'days', scale: colorScaleLow,  group: groups.l126 },
+            { file: 'SSP245_Short_21_40_low.geojson',  field: 'days', scale: colorScaleLow,  group: groups.l245 },
+            { file: 'SSP370_Short_21_40_low.geojson',  field: 'days', scale: colorScaleLow,  group: groups.l370 },
+            { file: 'SSP585_Short_21_40_low.geojson',  field: 'days', scale: colorScaleLow,  group: groups.l585 }
+        ];
 
-        // 5. 載入低溫資料
-        fetch('SSP126_Short_21_40_low.geojson')
-            .then(res => res.json())
-            .then(data => {
-                processAndRender(data, 'days', colorScaleLow, lowTempGroup126);
-            })
-            .catch(err => console.error("低溫載入出錯:", err));
-        fetch('SSP245_Short_21_40_low.geojson')
-            .then(res => res.json())
-            .then(data => {
-                processAndRender(data, 'days', colorScaleLow, lowTempGroup245);
-            })
-            .catch(err => console.error("低溫載入出錯:", err));
-        fetch('SSP370_Short_21_40_low.geojson')
-            .then(res => res.json())
-            .then(data => {
-                processAndRender(data, 'days', colorScaleLow, lowTempGroup370);
-            })
-            .catch(err => console.error("低溫載入出錯:", err));
-        fetch('SSP585_Short_21_40_low.geojson')
-            .then(res => res.json())
-            .then(data => {
-                processAndRender(data, 'days', colorScaleLow, lowTempGroup585);
-            })
-            .catch(err => console.error("低溫載入出錯:", err));
-        // 6. 載入邊界 (注意檔名空格可能造成問題，建議檢查檔名)
-        fetch('chiayi_boundary.geojson')
-            .then(res => res.json())
-            .then(data => {
-                L.geoJSON(data, {
-                    style: { color: "black", weight: 3, fill: false, pointerEvents: 'none' }
-                }).addTo(map);
-            })
-            .catch(err => console.error("邊界載入出錯:", err));
+        datasets.forEach(d => {
+            fetch(d.file).then(res => res.json()).then(data => {
+                processAndRender(data, d.field, d.scale, d.group);
+            }).catch(e => console.error("資料載入失敗:", d.file));
+        });
 
-        // 7. 圖層切換控制
-        var baseMaps = {
-                 "街道地圖": osm,
-                 "衛星影像": esri,
-                };
+        // 載入嘉義市邊界 (最上層，不可點擊)
+        fetch('chiayi_boundary.geojson').then(res => res.json()).then(data => {
+            L.geoJSON(data, { style: { color: "#333", weight: 3, fill: false, pointerEvents: 'none' } }).addTo(map);
+        });
 
-            var overlayMaps = {
-                "ssp126高溫日數": highTempGroup126,
-                "ssp245高溫日數": highTempGroup245,
-                "ssp370高溫日數": highTempGroup370,
-                "ssp585高溫日數": highTempGroup585,
-                "ssp126低溫日數": lowTempGroup126,
-                "ssp245低溫日數": lowTempGroup245,
-                "ssp370低溫日數": lowTempGroup370,
-                "ssp585低溫日數": lowTempGroup585,
-                };
+        // 7. 底圖切換器 (因為氣候圖層已移至自訂選單，這裡只留底圖)
+        L.control.layers({"街道地圖": osm, "衛星影像": esri}, {}, {position: 'topright'}).addTo(map);
 
-L.control.layers(baseMaps, overlayMaps, {collapsed: false}).addTo(map);
-        // GPS 功能
+        // 8. 左下角：固定說明圖例
+        var legend = L.control({position: 'bottomleft'});
+        legend.onAdd = function () {
+            var div = L.DomUtil.create('div', 'info-legend');
+            div.innerHTML = `
+                <button class="toggle-btn" onclick="toggleLegend()">➖ 收合</button>
+                <h4>嘉義市氣候溫度情境說明</h4>
+                <div id="legend-content">
+                <b>模式：TaiESM1</b><br>
+                <b>情境：ssp126/ssp245/ssp370/ssp585</b><br>
+                <b>短期：2021~2040</b>
+                <br>嘉義市韌性防災計畫-中正大學學研團隊製。<br>
+                <hr>
+                <p>🔴 <b>高溫日數</b>：指該區域日最高溫大於35°C的平均天數。</p>
+                <p>🔵 <b>低溫日數</b>：指該區域日最低溫小於15°C的平均天數。</p>
+                <small>資料來源：TCCIP AR6 1km網格日資料</small><br>
+                <small><b>#分析結果僅供參考</b></small>
+        </div>`;
+
+            L.DomEvent.disableClickPropagation(div);
+            return div;
+        };
+        legend.addTo(map);
+
+        // 9. 右下角：動態數值色階條
+        var colorBar = L.control({position: 'bottomright'});
+        colorBar.onAdd = function () {
+            var div = L.DomUtil.create('div', 'colorbar-legend');
+            div.innerHTML = `
+                <div id="high-bar-box" style="display:block;">
+                    <div class="colorbar-title">🌡️ 高溫預估天數色階</div>
+                    <div class="gradient-bar high-gradient"></div>
+                    <div class="bar-labels">
+                        <span id="h-min-val">--</span><span>(天)</span><span id="h-max-val">--</span>
+                    </div>
+                </div>
+                <div id="low-bar-box" style="display:none;">
+                    <div class="colorbar-title">❄️ 低溫預估天數色階</div>
+                    <div class="gradient-bar low-gradient"></div>
+                    <div class="bar-labels">
+                        <span id="l-min-val">--</span><span>(天)</span><span id="l-max-val">--</span>
+                    </div>
+                </div>`;
+            return div;
+        };
+        colorBar.addTo(map);
+
+        // 10. 互動功能與邏輯
+
+        // [核心] 選單驅動圖層切換與色條更新
+        function updateClimateLayer() {
+            var ssp = document.getElementById('ssp-select').value;
+            var type = document.getElementById('type-select').value;
+            var targetKey = (type === 'high' ? 'h' : 'l') + ssp;
+            var targetGroup = groups[targetKey];
+
+            // A. 清空所有氣候圖層
+            Object.keys(groups).forEach(k => map.removeLayer(groups[k]));
+
+            // B. 加上選擇的圖層
+            if (targetGroup) {
+                map.addLayer(targetGroup);
+                
+                // C. 更新右下角圖例數值
+                var currentData = datasets.find(d => d.group === targetGroup);
+                if (currentData) {
+                    var layers = targetGroup.getLayers();
+                    if (layers.length > 0 && layers[0].toGeoJSON) {
+                        var geojsonData = layers[0].toGeoJSON();
+                        var values = geojsonData.features.map(f => f.properties[currentData.field]).filter(v => v != null);
+                        if (values.length > 0) {
+                            var minV = Math.min(...values).toFixed(1);
+                            var maxV = Math.max(...values).toFixed(1);
+
+                            if (type === 'high') {
+                                document.getElementById('high-bar-box').style.display = 'block';
+                                document.getElementById('low-bar-box').style.display = 'none';
+                                document.getElementById('h-min-val').innerText = minV;
+                                document.getElementById('h-max-val').innerText = maxV;
+                            } else {
+                                document.getElementById('low-bar-box').style.display = 'block';
+                                document.getElementById('high-bar-box').style.display = 'none';
+                                document.getElementById('l-min-val').innerText = minV;
+                                document.getElementById('l-max-val').innerText = maxV;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 返回初始
+        function goHome() {
+            map.flyTo([23.48, 120.45], 13);
+            document.getElementById('ssp-select').value = "126";
+            document.getElementById('type-select').value = "high";
+            updateClimateLayer();
+            map.closePopup();
+        }
+
+        // GPS 定位
         function getLocation() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(pos => {
-                    L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map).bindPopup("你在這裡").openPopup();
-                    map.setView([pos.coords.latitude, pos.coords.longitude], 15);
-                });
+                    var lat = pos.coords.latitude;
+                    var lon = pos.coords.longitude;
+                    L.marker([lat, lon]).addTo(map).bindPopup("您目前的 GPS 位置").openPopup();
+                    map.setView([lat, lon], 15);
+                }, () => alert("無法取得位置，請檢查設備設定。"));
             }
         }
-var legend = L.control({position: 'bottomleft'});
 
-legend.onAdd = function (map) {
-    var div = L.DomUtil.create('div', 'info-legend');
-    div.innerHTML = `
-        <button class="toggle-btn" onclick="toggleLegend()">➖ 收合</button>
-        <h4>氣候情境說明-短期(2021-2040)</h4>
-        <div id="legend-content">
-        <b>模式：TaiESM1</b><br>
-        <b>情境：SSP1-2.6</b>
-        <br>嘉義市韌性防災計畫-中正大學學研團隊製。<br>
-        <hr>
-        <p>🔴 <b>高溫日數</b>：指該區域日最高溫大於35°C的平均天數。</p>
-        <p>🔵 <b>低溫日數</b>：指該區域日最低溫小於15°C的平均天數。</p>
-        <small>資料來源：TCCIP AR6 1km網格日資料</small><br>
-        <small><b>#分析結果僅供參考</b></small>
-        </div>
-    `;
-    L.DomEvent.disableClickPropagation(div);
-    return div;
-};
-function toggleLegend() {
-    var content = document.getElementById("legend-content");
-    var btn = document.querySelector(".toggle-btn");
-    
-    if (content.style.display === "none") {
-        content.style.display = "block"; // 換行顯示內容
-        btn.innerHTML = "➖ 收合";
-    } else {
-        content.style.display = "none"; // 縮小視窗
-        btn.innerHTML = "➕ 展開說明";
-    }
-}
+        // 左側圖例收合
+        function toggleLegend() {
+            var c = document.getElementById("legend-content");
+            var b = document.querySelector(".toggle-btn");
+            if (c.style.display === "none") {
+                c.style.display = "block";
+                b.innerHTML = "➖ 收合";
+            } else {
+                c.style.display = "none";
+                b.innerHTML = "➕ 展開";
+            }
+        }
 
-legend.addTo(map);
+        // 頁面載入後，延遲 800 毫秒執行一次更新，確保初始資料的數值能寫入圖例
+        setTimeout(updateClimateLayer, 800);
     </script>
 </body>
 </html>

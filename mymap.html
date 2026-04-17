@@ -198,21 +198,20 @@
 
         var villageControl = L.control({position: 'topright'});
         villageControl.onAdd = function() {
-            var div = L.DomUtil.create('div', 'village-control');
+            
+            var div = L.DomUtil.create('div', 'village-control'); 
             div.innerHTML = `
-                <div class="village-control">
                 <div style="font-weight:bold; font-size:13px; margin-bottom:5px;">🔍 行政區快搜</div>
-                 <select id="district-select" onchange="updateVillageDropdown(this.value)">
-                <option value="">-- 請選擇區 --</option>
-                <option value="東區">東區</option>
-                <option value="西區">西區</option>
-                    </select>
-                <select id="village-search-select" onchange="zoomToVillage(this.value)" disabled>
-                <option value="">-- 請先選擇區 --</option>
+                <select id="district-select" onchange="updateVillageDropdown(this.value)">
+                    <option value="">-- 請選擇區 --</option>
+                    <option value="東區">東區</option>
+                    <option value="西區">西區</option>
                 </select>
-                </div>
+                <select id="village-search-select" onchange="zoomToVillage(this.value)" disabled>
+                    <option value="">-- 請先選擇區 --</option>
+                </select>
             `;
-            L.DomEvent.disableClickPropagation(div); 
+            L.DomEvent.disableClickPropagation(div);
             return div;
         };
         villageControl.addTo(map);
